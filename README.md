@@ -3,7 +3,7 @@
 **Generate radar pulses and radio modulations, look at them properly, then train a
 classifier — all inside your browser.**
 
-### 🔗 Live site: <https://pulse-read.vercel.app>
+### 🔗 Live site: <https://pulsereads.vercel.app>
 
 No server, no Python, no libraries. The signals, the feature extraction, the FFT and
 the Random Forest are all written from scratch and run on your machine.
