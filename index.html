@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse Read</title>
+<meta name="description" content="Generate radar pulses and radio modulations, see them in time, frequency and I/Q, then train a classifier in your browser. No server.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  :root{
+    --bg:#0b0d0a; --panel:#141710; --panel-2:#1c2016; --line:#2b301f;
+    --text:#eef0e6; --muted:#9aa387; --dim:#6b7358;
+    --acc:#fbbf24; --acc-2:#d97706; --acc-l:#fde68a;
+    --ok:#4ade80; --bad:#f87171; --info:#60a5fa;
+    --radius:10px;
+    --font:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+    --mono:'SF Mono',Consolas,'Roboto Mono',monospace;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5}
+  h1,h2,h3{margin:0;font-weight:600}
+  button{font-family:inherit;font-size:inherit;cursor:pointer}
+
+  header{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);
+         background:linear-gradient(180deg,#191d12,#10130d);position:sticky;top:0;z-index:50}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand-name{font-size:17px;font-weight:700;letter-spacing:-.02em}
+  .brand-name span{color:var(--acc)}
+  .tagline{color:var(--dim);font-size:12.5px;border-left:1px solid var(--line);padding-left:14px}
+
+  .wrap{display:grid;grid-template-columns:324px 1fr;gap:18px;padding:18px 22px;max-width:1700px;margin:0 auto;align-items:start}
+  @media(max-width:1040px){.wrap{grid-template-columns:1fr}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .panel-head{padding:11px 15px;border-bottom:1px solid var(--line);background:var(--panel-2);
+              font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .panel-body{padding:15px}
+  .stack > * + *{margin-top:14px}
+
+  label.field{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  label.field b{color:var(--text);font-family:var(--mono)}
+  select{width:100%;padding:8px 10px;background:#0f120c;border:1px solid var(--line);border-radius:7px;
+         color:var(--text);font-family:inherit;font-size:13px;outline:none}
+  select:focus{border-color:var(--acc)}
+  input[type=range]{width:100%;accent-color:var(--acc);cursor:pointer}
+
+  .btn{display:block;width:100%;padding:9px 14px;border-radius:7px;border:1px solid var(--line);
+       background:var(--panel-2);color:var(--text);font-weight:500;transition:.15s;text-align:center}
+  .btn:hover:not(:disabled){background:#262b1c;border-color:var(--dim)}
+  .btn:disabled{opacity:.38;cursor:not-allowed}
+  .btn-primary{background:linear-gradient(180deg,var(--acc),var(--acc-2));border-color:var(--acc-l);
+               color:#231a05;font-weight:700}
+  .btn-primary:hover:not(:disabled){background:linear-gradient(180deg,var(--acc-l),var(--acc))}
+  .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btn-row .btn{width:auto}
+
+  .seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{padding:9px 4px;background:#0f120c;border:none;color:var(--muted);font-weight:500;transition:.15s;font-size:13px}
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--acc);color:#231a05;font-weight:700}
+  .seg button:hover:not(.on){background:#1f2417;color:var(--text)}
+
+  .check{display:flex;align-items:flex-start;gap:9px;padding:5px 0;cursor:pointer;font-size:12.5px;line-height:1.45}
+  .check input{accent-color:var(--acc);width:15px;height:15px;cursor:pointer;margin-top:2px;flex-shrink:0}
+
+  .tabs{display:flex;gap:2px;padding:8px 8px 0;background:var(--panel-2);border-bottom:1px solid var(--line)}
+  .tab{padding:8px 15px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:500;
+       border-radius:7px 7px 0 0;border-bottom:2px solid transparent;transition:.15s}
+  .tab:hover{color:var(--text)}
+  .tab.active{color:var(--acc);border-bottom-color:var(--acc);background:var(--panel)}
+  .tab:disabled{opacity:.35;cursor:not-allowed}
+
+  .plots{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px}
+  @media(max-width:760px){.plots{grid-template-columns:1fr}}
+  .plot{background:#080a06;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .plot .cap{padding:6px 10px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);
+             background:#0f120c;letter-spacing:.04em;text-transform:uppercase}
+  .plot canvas{display:block;width:100%;height:170px}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:9px}
+  .stat{background:#0f120c;border:1px solid var(--line);border-radius:7px;padding:10px 11px}
+  .stat .k{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+  .stat .v{font-size:17px;font-weight:700;font-family:var(--mono)}
+
+  .kv{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0f120c;
+      max-height:290px;overflow-y:auto}
+  .kv .r{display:flex;gap:10px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .kv .r:last-child{border-bottom:none}
+  .kv .k{color:var(--muted);flex:1}
+  .kv .v{font-family:var(--mono);font-size:12px}
+  .bar{height:5px;background:var(--acc);border-radius:3px;align-self:center}
+  .empty{padding:20px;text-align:center;color:var(--dim);font-size:12.5px;line-height:1.7}
+
+  table.cm{border-collapse:collapse;font-size:11.5px;font-family:var(--mono);width:100%}
+  table.cm th,table.cm td{border:1px solid var(--line);padding:5px 6px;text-align:center}
+  table.cm th{background:#0f120c;color:var(--muted);font-weight:500;font-size:10.5px}
+  table.cm th.rowh{text-align:right;white-space:nowrap}
+  table.cm td.d{font-weight:700}
+
+  .prog{height:6px;background:#0f120c;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .prog i{display:block;height:100%;background:var(--acc);width:0;transition:width .15s}
+
+  .note{background:#191408;border:1px solid #3f3113;border-left:3px solid var(--acc);border-radius:6px;
+        padding:10px 12px;font-size:12px;color:#cdbf9c;line-height:1.6}
+  .note b{color:var(--acc)}
+  .note.warn{background:#1a1010;border-color:#4a2222;border-left-color:var(--bad);color:#d9b3b3}
+  .note.warn b{color:var(--bad)}
+  .hint{color:var(--dim);font-size:11.5px;line-height:1.55}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;
+        background:#1e2415;border:1px solid var(--line);color:var(--acc-l)}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel-2);
+         border:1px solid var(--line);border-radius:8px;padding:11px 18px;font-size:13px;opacity:0;transition:.25s;
+         z-index:100;pointer-events:none;box-shadow:0 8px 28px #0009}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-track{background:#0f120c}
+  ::-webkit-scrollbar-thumb{background:#333a24;border-radius:5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <path d="M2 22h4l2-12 3 18 3-22 3 16 2.5-8 2.5 8h8" stroke="#fbbf24" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="brand-name">Pulse <span>Read</span></div>
+  </div>
+  <div class="tagline">Signal simulator &amp; classifier</div>
+</header>
+
+<div class="wrap">
+
+  <!-- ================= SIDEBAR ================= -->
+  <div class="stack">
+
+    <div class="panel">
+      <div class="panel-head">1 · Signal</div>
+      <div class="panel-body stack">
+        <div class="seg">
+          <button id="fRadar" class="on">Radar pulses</button>
+          <button id="fRadio">Radio</button>
+        </div>
+        <div>
+          <label class="field" for="kind">Emitter type</label>
+          <select id="kind"></select>
+        </div>
+        <div>
+          <label class="field">Signal-to-noise ratio — <b id="snrL">20</b> dB</label>
+          <input type="range" id="snr" min="0" max="40" value="20">
+        </div>
+        <button class="btn btn-primary" id="gen">Generate one signal</button>
+        <div class="hint" id="kindNote"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">2 · Build a dataset</div>
+      <div class="panel-body stack">
+        <div>
+          <label class="field">Examples per type — <b id="perL">25</b></label>
+          <input type="range" id="per" min="10" max="60" value="25">
+        </div>
+        <button class="btn" id="build">Build dataset</button>
+        <div class="prog" id="buildProg" hidden><i></i></div>
+        <div class="hint" id="dsInfo">No dataset yet</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">3 · Train a classifier</div>
+      <div class="panel-body stack">
+        <div>
+          <label class="field">Trees in the forest — <b id="treesL">60</b></label>
+          <input type="range" id="trees" min="10" max="150" value="60">
+        </div>
+        <div>
+          <label class="field">Maximum depth — <b id="depthL">12</b></label>
+          <input type="range" id="depth" min="3" max="20" value="12">
+        </div>
+        <label class="check" id="leakWrap">
+          <input type="checkbox" id="leak">
+          <span>Also feed it the spec sheet <span class="pill">shows cheating</span></span>
+        </label>
+        <button class="btn btn-primary" id="train" disabled>Train</button>
+        <div class="hint" id="trainInfo">Build a dataset first</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">4 · Try it</div>
+      <div class="panel-body stack">
+        <button class="btn" id="test1" disabled>Classify one new signal</button>
+        <button class="btn" id="test50" disabled>Run 50 fresh signals</button>
+        <button class="btn" id="exportBtn" disabled>Export dataset (CSV)</button>
+      </div>
+    </div>
+
+    <div class="note" id="sideNote"></div>
+
+  </div>
+
+  <!-- ================= MAIN ================= -->
+  <div class="stack">
+    <div class="panel">
+      <div class="tabs">
+        <button class="tab active" data-view="signal">Signal</button>
+        <button class="tab" data-view="training" disabled>Training</button>
+        <button class="tab" data-view="testing" disabled>Testing</button>
+      </div>
+
+      <!-- ---- signal view ---- -->
+      <div id="vSignal">
+        <div class="plots">
+          <div class="plot"><div class="cap">Amplitude over time</div><canvas id="pTime"></canvas></div>
+          <div class="plot"><div class="cap">Frequency spectrum</div><canvas id="pFreq"></canvas></div>
+          <div class="plot"><div class="cap">Spectrogram — frequency against time</div><canvas id="pSpec"></canvas></div>
+          <div class="plot"><div class="cap" id="capIq">I/Q constellation</div><canvas id="pIq"></canvas></div>
+        </div>
+        <div class="panel-body" style="border-top:1px solid var(--line)">
+          <label class="field">What was measured from this signal</label>
+          <div class="kv" id="featTable"><div class="empty">Press “Generate one signal”.</div></div>
+        </div>
+      </div>
+
+      <!-- ---- training view ---- -->
+      <div id="vTraining" hidden>
+        <div class="panel-body stack">
+          <div class="stats">
+            <div class="stat"><div class="k">Accuracy</div><div class="v" id="tAcc">—</div></div>
+            <div class="stat"><div class="k">Trained on</div><div class="v" id="tN">—</div></div>
+            <div class="stat"><div class="k">Held back</div><div class="v" id="tHeld">—</div></div>
+            <div class="stat"><div class="k">Train time</div><div class="v" id="tTime">—</div></div>
+          </div>
+          <div>
+            <label class="field">Confusion matrix — rows are the truth, columns are the guess</label>
+            <div style="overflow-x:auto"><table class="cm" id="cm"></table></div>
+          </div>
+          <div>
+            <label class="field">Which measurements the forest actually relied on</label>
+            <div class="kv" id="impTable"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- testing view ---- -->
+      <div id="vTesting" hidden>
+        <div class="panel-body stack">
+          <div class="stats">
+            <div class="stat"><div class="k">Tested</div><div class="v" id="xN">0</div></div>
+            <div class="stat"><div class="k">Correct</div><div class="v" id="xOk">0</div></div>
+            <div class="stat"><div class="k">Accuracy</div><div class="v" id="xAcc">—</div></div>
+            <div class="stat"><div class="k">Mean confidence</div><div class="v" id="xConf">—</div></div>
+          </div>
+          <div class="kv" id="testLog" style="max-height:420px">
+            <div class="empty">Nothing tested yet.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2800); }
+
+// ══════════════════════════════════════════════════════════════
+//  FFT — iterative radix-2, in place
+// ══════════════════════════════════════════════════════════════
+function fft(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { [re[i],re[j]]=[re[j],re[i]]; [im[i],im[j]]=[im[j],im[i]]; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang=-2*Math.PI/len, wr=Math.cos(ang), wi=Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr=1, ci=0;
+      for (let k = 0; k < len/2; k++) {
+        const ur=re[i+k], ui=im[i+k];
+        const vr=re[i+k+len/2]*cr-im[i+k+len/2]*ci;
+        const vi=re[i+k+len/2]*ci+im[i+k+len/2]*cr;
+        re[i+k]=ur+vr; im[i+k]=ui+vi;
+        re[i+k+len/2]=ur-vr; im[i+k+len/2]=ui-vi;
+        const ncr=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=ncr;
+      }
+    }
+  }
+}
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
+
+// ══════════════════════════════════════════════════════════════
+//  SIGNAL GENERATION — complex baseband
+//
+//  A real receiver mixes the carrier down to near zero and samples
+//  the I/Q envelope. That is what is modelled here. Simulating an
+//  8–12 GHz carrier directly would need >24 GHz sampling; every
+//  feature that identifies an emitter — pulse width, PRF, bandwidth,
+//  modulation shape — lives in the envelope and survives intact.
+// ══════════════════════════════════════════════════════════════
+const RADIO = {
+  AM:   {label:'AM — amplitude modulation', note:'Broadcast band. Carrier amplitude follows the audio.'},
+  FM:   {label:'FM — frequency modulation', note:'Broadcast band. Constant amplitude, frequency swings.'},
+  SSB:  {label:'SSB — single sideband',     note:'HF voice. One sideband only, carrier suppressed.'},
+  BPSK: {label:'BPSK — 2-phase shift key',  note:'One bit per symbol. Two phase states.'},
+  QPSK: {label:'QPSK — 4-phase shift key',  note:'Two bits per symbol. Satellite links.'},
+  PSK8: {label:'8PSK — 8-phase shift key',  note:'Three bits per symbol. Microwave links.'},
+  QAM16:{label:'16-QAM',                    note:'Four bits per symbol. Amplitude and phase both carry data.'},
+  QAM64:{label:'64-QAM',                    note:'Six bits per symbol. Cable, Wi-Fi, digital TV.'},
+  FSK:  {label:'FSK — frequency shift key', note:'Two tones. Teletype, telemetry, pagers.'},
+  OFDM: {label:'OFDM — many subcarriers',   note:'Wi-Fi, LTE, digital broadcast. Noise-like envelope.'},
+  FHSS: {label:'FHSS — frequency hopping',  note:'Carrier jumps between channels. Tactical radio.'},
+  DSSS: {label:'DSSS — spread spectrum',    note:'Data multiplied by a fast code. Wide, flat, quiet.'}
+};
+const RADIO_KINDS = Object.keys(RADIO);
+
+function genRadio(kind, N, snrDb) {
+  const I=new Float64Array(N), Q=new Float64Array(N);
+  const sps=Math.round(rnd(6,16));
+  let syms=[], cur=-1;
+  const nextSym=(n,make)=>{const s=Math.floor(n/sps); if(s!==cur){cur=s; syms=make();} return syms;};
+  const psk=(m)=>{const a=2*Math.PI*Math.floor(Math.random()*m)/m; return [Math.cos(a),Math.sin(a)];};
+  const qam=(L)=>{const lv=[];for(let i=0;i<L;i++)lv.push(2*i-(L-1));
+    return [lv[Math.floor(Math.random()*L)],lv[Math.floor(Math.random()*L)]];};
+
+  if(kind==='AM'){const m=rnd(.3,.85),fm=rnd(.002,.02);
+    for(let n=0;n<N;n++){I[n]=1+m*Math.sin(2*Math.PI*fm*n);Q[n]=0;}}
+  else if(kind==='FM'){const beta=rnd(2,9),fm=rnd(.002,.02);let ph=0;
+    for(let n=0;n<N;n++){ph+=0.02*Math.sin(2*Math.PI*fm*n)*beta;I[n]=Math.cos(ph);Q[n]=Math.sin(ph);}}
+  else if(kind==='SSB'){const f1=rnd(.01,.04),f2=rnd(.05,.09);
+    for(let n=0;n<N;n++){I[n]=Math.sin(2*Math.PI*f1*n)+.6*Math.sin(2*Math.PI*f2*n);
+      Q[n]=-.9*Math.cos(2*Math.PI*f1*n);}}
+  else if(kind==='BPSK'){for(let n=0;n<N;n++){const s=nextSym(n,()=>[Math.random()<.5?-1:1,0]);I[n]=s[0];Q[n]=0;}}
+  else if(kind==='QPSK'){for(let n=0;n<N;n++){const s=nextSym(n,()=>psk(4));I[n]=s[0];Q[n]=s[1];}}
+  else if(kind==='PSK8'){for(let n=0;n<N;n++){const s=nextSym(n,()=>psk(8));I[n]=s[0];Q[n]=s[1];}}
+  else if(kind==='QAM16'){for(let n=0;n<N;n++){const s=nextSym(n,()=>qam(4));I[n]=s[0]/3;Q[n]=s[1]/3;}}
+  else if(kind==='QAM64'){for(let n=0;n<N;n++){const s=nextSym(n,()=>qam(8));I[n]=s[0]/7;Q[n]=s[1]/7;}}
+  else if(kind==='FSK'){const d=rnd(.02,.06);let ph=0;
+    for(let n=0;n<N;n++){const s=nextSym(n,()=>[Math.random()<.5?-1:1,0]);
+      ph+=2*Math.PI*d*s[0];I[n]=Math.cos(ph);Q[n]=Math.sin(ph);}}
+  else if(kind==='OFDM'){const K=64,sl=K*2;
+    for(let b=0;b<N;b+=sl){const cr=new Float64Array(K),ci=new Float64Array(K);
+      for(let k=2;k<K-2;k++){const p=psk(4);cr[k]=p[0];ci[k]=p[1];}
+      fft(cr,ci);
+      for(let n=0;n<sl&&b+n<N;n++){I[b+n]=cr[n%K]/8;Q[b+n]=ci[n%K]/8;}}}
+  else if(kind==='FHSS'){const hop=Math.round(rnd(180,420));let f=0,ph=0;
+    for(let n=0;n<N;n++){if(n%hop===0)f=rnd(-.25,.25);ph+=2*Math.PI*f;
+      I[n]=Math.cos(ph);Q[n]=Math.sin(ph);}}
+  else if(kind==='DSSS'){const chip=Math.round(rnd(2,5));let d=1;
+    for(let n=0;n<N;n++){if(n%(chip*24)===0)d=Math.random()<.5?-1:1;
+      const c=(Math.floor(n/chip)*2654435761%2)?1:-1;I[n]=d*c;Q[n]=0;}}
+
+  return addNoise(I,Q,snrDb);
+}
+
+// Airborne fire-control radars. Ranges follow the published figures the
+// original Python tool used — note how heavily they overlap.
+const RADAR = {
+  'AN/APG-77': {pw:[0.5,5],  prf:[2000,10000], mods:['lfm','barker','poly'], note:'F-22. X-band AESA. Chirp and phase-coded pulses.'},
+  'AN/APG-81': {pw:[0.2,10], prf:[1500,15000], mods:['lfm','nlfm','barker'], note:'F-35. Widest pulse-width and PRF span of the six.'},
+  'AN/APG-79': {pw:[0.8,8],  prf:[1200,12000], mods:['lfm','step'],          note:'F/A-18E/F AESA. Chirp and stepped frequency.'},
+  'AN/AWG-9':  {pw:[2,15],   prf:[600,4000],   mods:['cw'],                  note:'F-14. Older pulse-Doppler, unmodulated pulses.'},
+  'AN/APQ-181':{pw:[1,20],   prf:[500,3000],   mods:['lpi','poly'],          note:'B-2. Low probability of intercept waveforms.'},
+  'AN/APG-63': {pw:[1.5,12], prf:[900,9000],   mods:['cw','step'],           note:'F-15. Pulse-Doppler with moving-target indication.'}
+};
+const RADAR_KINDS = Object.keys(RADAR);
+const FS = 10e6;                     // 10 MHz baseband sample rate
+
+function genRadar(kind, N, snrDb) {
+  const p = RADAR[kind];
+  const pw = rnd(p.pw[0], p.pw[1]) * 1e-6, prf = rnd(p.prf[0], p.prf[1]);
+  const mod = p.mods[Math.floor(Math.random() * p.mods.length)];
+  const I=new Float64Array(N), Q=new Float64Array(N);
+  const period=Math.round(FS/prf), pwS=Math.max(3,Math.round(pw*FS));
+  const bark=[1,1,1,1,1,-1,-1,1,1,-1,1,-1,1];
+  const start=Math.floor(Math.random()*period);
+
+  for (let n=0;n<N;n++){
+    const t=(n-start)%period;
+    if (t<0||t>=pwS) continue;
+    const u=t/pwS;
+    let ph=0;
+    if      (mod==='lfm')    ph=Math.PI*(u*u)*pwS*0.9;                 // linear chirp
+    else if (mod==='nlfm')   ph=Math.PI*Math.pow(u,3)*pwS*1.1;         // non-linear chirp
+    else if (mod==='step')   ph=2*Math.PI*Math.floor(u*8)/8*pwS*0.08;  // stepped frequency
+    else if (mod==='barker') ph=bark[Math.floor(u*13)%13]>0?0:Math.PI; // 13-bit Barker code
+    else if (mod==='poly')   ph=Math.PI*Math.pow(Math.floor(u*16),2)/16;
+    else if (mod==='lpi')    ph=2*Math.PI*((Math.floor(u*31)*7)%31)/31;
+    let env=1;
+    const rise=Math.max(1,Math.round(pwS*0.1));
+    if (t<rise) env=t/rise; else if (t>pwS-rise) env=(pwS-t)/rise;
+    I[n]=env*Math.cos(ph); Q[n]=env*Math.sin(ph);
+  }
+  const out = addNoise(I,Q,snrDb);
+  out.truth = { pw, prf, mod };
+  return out;
+}
+
+function addNoise(I,Q,snrDb){
+  const N=I.length;
+  let p=0; for(let n=0;n<N;n++) p+=I[n]*I[n]+Q[n]*Q[n]; p/=N;
+  const s=Math.sqrt(p)||1;
+  for(let n=0;n<N;n++){ I[n]/=s; Q[n]/=s; }
+  const np=Math.sqrt(Math.pow(10,-snrDb/10)/2);
+  for(let n=0;n<N;n++){ I[n]+=np*gauss(); Q[n]+=np*gauss(); }
+  return {I,Q};
+}
+
+// ══════════════════════════════════════════════════════════════
+//  FEATURES — everything here is measured from the samples.
+//  Nothing is copied from the answer key.
+// ══════════════════════════════════════════════════════════════
+const FEATNAMES = ['ampVariance','crestFactor','peakToAvgDb','ampKurtosis','ampSkew',
+  'freqSpread','freqAbsMean','phaseJumpRate','spectralCentre','occupiedBandwidth',
+  'spectralFlatness','rolloff85','centreDrift','ampEntropy','envelopeRepeat','iqBalance',
+  'psk2moment','psk4moment','psk8moment','dutyCycle','pulseWidth','pulseInterval','pulseCount'];
+
+const FEATHELP = {
+  ampVariance:'How much the envelope wobbles',
+  crestFactor:'Peak divided by average level',
+  peakToAvgDb:'Peak-to-average power, in dB',
+  ampKurtosis:'Spikiness of the envelope',
+  ampSkew:'Lopsidedness of the envelope',
+  freqSpread:'Spread of instantaneous frequency',
+  freqAbsMean:'Average frequency swing',
+  phaseJumpRate:'Fraction of samples with a sudden phase jump',
+  spectralCentre:'Where the energy sits in the band',
+  occupiedBandwidth:'Width holding 90% of the power',
+  spectralFlatness:'Noise-like (1) versus tonal (0)',
+  rolloff85:'Frequency below which 85% of power lies',
+  centreDrift:'Does the centre frequency wander? Catches hopping',
+  ampEntropy:'How many distinct amplitude levels',
+  envelopeRepeat:'Strongest repeat in the envelope',
+  iqBalance:'Is there a Q channel at all, or is it real-only',
+  psk2moment:'Collapses for 2-phase keying',
+  psk4moment:'Collapses for 4-phase keying',
+  psk8moment:'Collapses for 8-phase keying',
+  dutyCycle:'Fraction of time transmitting',
+  pulseWidth:'Length of one pulse',
+  pulseInterval:'Gap between pulse starts — this is PRF',
+  pulseCount:'How many pulses were in view'
+};
+
+function powerMoment(I,Q,M){
+  const N=I.length; let ar=0, ai=0;
+  for(let n=0;n<N;n++){
+    const r=Math.hypot(I[n],Q[n])||1e-12;
+    let cr=I[n]/r, ci=Q[n]/r, xr=1, xi=0;
+    for(let k=0;k<M;k++){ const t=xr*cr-xi*ci; xi=xr*ci+xi*cr; xr=t; }
+    ar+=xr; ai+=xi;
+  }
+  return Math.hypot(ar/N, ai/N);
+}
+
+function pulseFeatures(I,Q){
+  const N=I.length, env=new Float64Array(N);
+  for(let n=0;n<N;n++) env[n]=Math.hypot(I[n],Q[n]);
+  const sorted=Float64Array.from(env).sort();
+  const med=sorted[Math.floor(N*0.5)], hi=sorted[Math.floor(N*0.999)];
+  if(hi<=med*1.05) return [0,0,0,0];
+  const thr=med+0.40*(hi-med);
+  const runs=[], gaps=[]; let inP=env[0]>thr, len=1, on=0;
+  for(let n=1;n<N;n++){
+    const a=env[n]>thr;
+    if(a===inP) len++; else { (inP?runs:gaps).push(len); inP=a; len=1; }
+  }
+  (inP?runs:gaps).push(len);
+  for(let n=0;n<N;n++) if(env[n]>thr) on++;
+  const good=runs.filter(r=>r>=2), gg=gaps.filter(g=>g>=2);
+  const meanRun=good.length? good.reduce((a,b)=>a+b,0)/good.length : 0;
+  const pri=(good.length>1 && gg.length)? meanRun + gg.reduce((a,b)=>a+b,0)/gg.length : 0;
+  return [ on/N, meanRun/N, pri/N, Math.min(good.length,64)/64 ];
+}
+
+function features(I,Q){
+  const N=I.length;
+  const env=new Float64Array(N); let m=0;
+  for(let n=0;n<N;n++){ env[n]=Math.hypot(I[n],Q[n]); m+=env[n]; }
+  m/=N;
+  let v=0,k4=0,s3=0,mx=0,pw=0;
+  for(let n=0;n<N;n++){ const d=env[n]-m; v+=d*d; pw+=env[n]*env[n]; if(env[n]>mx)mx=env[n]; }
+  v/=N; const sd=Math.sqrt(v)||1e-12; pw/=N;
+  for(let n=0;n<N;n++){ const z=(env[n]-m)/sd; s3+=z*z*z; k4+=z*z*z*z; }
+  s3/=N; k4=k4/N-3;
+  const rms=Math.sqrt(pw)||1e-12;
+
+  let fs=0, fm2=0, jumps=0;
+  const df=new Float64Array(N-1);
+  for(let n=1;n<N;n++){
+    let d=Math.atan2(Q[n],I[n])-Math.atan2(Q[n-1],I[n-1]);
+    while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI;
+    df[n-1]=d; fs+=d; fm2+=Math.abs(d);
+    if(Math.abs(d)>1.2) jumps++;
+  }
+  fs/=(N-1); fm2/=(N-1);
+  let fv=0; for(let n=0;n<N-1;n++){ const d=df[n]-fs; fv+=d*d; } fv/=(N-1);
+
+  const re=Float64Array.from(I), im=Float64Array.from(Q);
+  fft(re,im);
+  const shifted=new Float64Array(N); let tot=0;
+  for(let n=0;n<N;n++){ const p=re[n]*re[n]+im[n]*im[n]; tot+=p; }
+  for(let n=0;n<N;n++){ const s=(n+N/2)%N; shifted[n]=re[s]*re[s]+im[s]*im[s]; }
+  tot=tot||1e-12;
+  let cen=0; for(let n=0;n<N;n++) cen+=((n/N)-0.5)*shifted[n];
+  cen/=tot;
+  const order=Array.from({length:N},(_,i)=>i).sort((a,b)=>shifted[b]-shifted[a]);
+  let acc=0, lo=N, hi=0;
+  for(const idx of order){ acc+=shifted[idx]; if(idx<lo)lo=idx; if(idx>hi)hi=idx; if(acc>=0.9*tot) break; }
+  const bw=(hi-lo)/N;
+  let logsum=0; for(let n=0;n<N;n++) logsum+=Math.log(shifted[n]+1e-15);
+  const flat=Math.exp(logsum/N)/(tot/N);
+  let c=0, roll=0;
+  for(let n=0;n<N;n++){ c+=shifted[n]; if(c>=0.85*tot){ roll=(n/N)-0.5; break; } }
+
+  const W=8, seg=Math.floor(N/W), cens=[];
+  for(let w=0;w<W;w++){
+    const rr=new Float64Array(seg), ii=new Float64Array(seg);
+    for(let n=0;n<seg;n++){ rr[n]=I[w*seg+n]; ii[n]=Q[w*seg+n]; }
+    fft(rr,ii);
+    let t2=0, cc=0;
+    for(let n=0;n<seg;n++){ const p=rr[n]*rr[n]+ii[n]*ii[n]; t2+=p; cc+=(((n+seg/2)%seg)/seg-0.5)*p; }
+    cens.push(cc/(t2||1e-12));
+  }
+  const cm=cens.reduce((a,b)=>a+b,0)/W;
+  const drift=Math.sqrt(cens.reduce((a,b)=>a+(b-cm)*(b-cm),0)/W);
+
+  const B=24, hist=new Float64Array(B);
+  for(let n=0;n<N;n++){ const b=Math.min(B-1,Math.floor(env[n]/(mx||1)*B)); hist[b]++; }
+  let ent=0; for(let b=0;b<B;b++){ const p=hist[b]/N; if(p>0) ent-=p*Math.log(p); }
+  ent/=Math.log(B);
+
+  let best=0;
+  const L=Math.min(400,Math.floor(N/4));
+  let e0=0; for(let n=0;n<N;n++) e0+=(env[n]-m)*(env[n]-m);
+  for(let lag=4;lag<L;lag++){
+    let s=0; for(let n=0;n<N-lag;n++) s+=(env[n]-m)*(env[n+lag]-m);
+    const r=s/(e0||1e-12); if(r>best) best=r;
+  }
+
+  let pi2=0, pq2=0;
+  for(let n=0;n<N;n++){ pi2+=I[n]*I[n]; pq2+=Q[n]*Q[n]; }
+  const bal=Math.min(pi2,pq2)/(Math.max(pi2,pq2)||1e-12);
+
+  return [ v/(m*m||1e-12), mx/rms, 10*Math.log10((mx*mx)/(pw||1e-12)), k4, s3,
+           Math.sqrt(fv), fm2, jumps/(N-1), cen, bw, flat, roll, drift, ent, best, bal,
+           powerMoment(I,Q,2), powerMoment(I,Q,4), powerMoment(I,Q,8) ]
+         .concat(pulseFeatures(I,Q));
+}
+
+// The spec-sheet numbers the original Python handed its classifier as if
+// they were measurements. Beam width and peak power cannot be read off a
+// received pulse — they identify the type outright.
+const LEAK = {
+  'AN/APG-77':[3.0,10000,0,1,0], 'AN/APG-81':[2.5,15000,2,1,1],
+  'AN/APG-79':[3.5,12000,0,1,0], 'AN/AWG-9':[4.0,8000,0,0,2],
+  'AN/APQ-181':[2.0,5000,1,1,3], 'AN/APG-63':[3.8,9000,0,0,4]
+};
+const LEAKNAMES = ['spec:beamWidth','spec:peakPower','spec:polarisation','spec:scanType','spec:role'];
+
+// ══════════════════════════════════════════════════════════════
+//  RANDOM FOREST — CART trees with Gini splits, bagged.
+// ══════════════════════════════════════════════════════════════
+function gini(counts,n){ let g=1; for(const c of counts) if(c) g-=(c/n)*(c/n); return g; }
+
+function buildTree(X,y,idx,nCls,depth,maxDepth,minLeaf,mtry,imp){
+  const n=idx.length;
+  const counts=new Array(nCls).fill(0);
+  for(const i of idx) counts[y[i]]++;
+  let maj=0; for(let c=1;c<nCls;c++) if(counts[c]>counts[maj]) maj=c;
+  const g=gini(counts,n);
+  if(depth>=maxDepth||n<2*minLeaf||g===0) return {leaf:true,cls:maj,counts,n};
+
+  const nFeat=X[0].length, feats=[];
+  while(feats.length<Math.min(mtry,nFeat)){
+    const f=Math.floor(Math.random()*nFeat);
+    if(!feats.includes(f)) feats.push(f);
+  }
+  let best=null;
+  for(const f of feats){
+    const vals=idx.map(i=>X[i][f]).sort((a,b)=>a-b);
+    for(let q=1;q<=7;q++){
+      const thr=vals[Math.floor(vals.length*q/8)];
+      if(!Number.isFinite(thr)) continue;
+      const lc=new Array(nCls).fill(0), rc=new Array(nCls).fill(0);
+      let ln=0, rn=0;
+      for(const i of idx){ if(X[i][f]<=thr){lc[y[i]]++;ln++;} else {rc[y[i]]++;rn++;} }
+      if(ln<minLeaf||rn<minLeaf) continue;
+      const gain=g-(ln/n)*gini(lc,ln)-(rn/n)*gini(rc,rn);
+      if(!best||gain>best.gain) best={f,thr,gain};
+    }
+  }
+  if(!best||best.gain<=1e-9) return {leaf:true,cls:maj,counts,n};
+  imp[best.f]+=best.gain*n;
+  const L=[],R=[];
+  for(const i of idx) (X[i][best.f]<=best.thr?L:R).push(i);
+  return {leaf:false,f:best.f,thr:best.thr,
+          L:buildTree(X,y,L,nCls,depth+1,maxDepth,minLeaf,mtry,imp),
+          R:buildTree(X,y,R,nCls,depth+1,maxDepth,minLeaf,mtry,imp)};
+}
+function leafOf(t,x){ while(!t.leaf) t = x[t.f]<=t.thr ? t.L : t.R; return t; }
+
+function trainForest(X,y,nCls,opt){
+  const nTrees=opt.nTrees, maxDepth=opt.maxDepth, minLeaf=2;
+  const nFeat=X[0].length, mtry=Math.max(2,Math.round(Math.sqrt(nFeat)));
+  const imp=new Array(nFeat).fill(0), trees=[];
+  for(let t=0;t<nTrees;t++){
+    const boot=[];
+    for(let i=0;i<X.length;i++) boot.push(Math.floor(Math.random()*X.length));
+    trees.push(buildTree(X,y,boot,nCls,0,maxDepth,minLeaf,mtry,imp));
+  }
+  const tot=imp.reduce((a,b)=>a+b,0)||1;
+  return {trees,nCls,importance:imp.map(v=>v/tot)};
+}
+function predict(F,x){
+  const votes=new Array(F.nCls).fill(0);
+  for(const t of F.trees){ const lf=leafOf(t,x); for(let c=0;c<F.nCls;c++) votes[c]+=lf.counts[c]/lf.n; }
+  let b=0; for(let c=1;c<F.nCls;c++) if(votes[c]>votes[b]) b=c;
+  const s=votes.reduce((a,v)=>a+v,0)||1;
+  return {cls:b, conf:votes[b]/s};
+}
+
+// ══════════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════════
+const S = {
+  family:'radar', last:null, ds:null, forest:null, featNames:[],
+  test:{n:0,ok:0,conf:0}
+};
+const kinds = () => S.family==='radar' ? RADAR_KINDS : RADIO_KINDS;
+const catalogue = () => S.family==='radar' ? RADAR : RADIO;
+const sampleLen = () => S.family==='radar' ? 8192 : 2048;
+const generate = (k,snr) => S.family==='radar' ? genRadar(k,sampleLen(),snr) : genRadio(k,sampleLen(),snr);
+
+// ══════════════════════════════════════════════════════════════
+//  PLOTTING
+// ══════════════════════════════════════════════════════════════
+function fitCanvas(c){
+  const dpr=window.devicePixelRatio||1, r=c.getBoundingClientRect();
+  c.width=Math.max(1,Math.round(r.width*dpr));
+  c.height=Math.max(1,Math.round(r.height*dpr));
+  const x=c.getContext('2d');
+  x.setTransform(dpr,0,0,dpr,0,0);
+  return {x, W:r.width, H:r.height};
+}
+const CSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function plotTime(I,Q){
+  const {x,W,H}=fitCanvas($('pTime'));
+  x.clearRect(0,0,W,H);
+  const N=I.length, env=new Float64Array(N);
+  let mx=0; for(let n=0;n<N;n++){ env[n]=Math.hypot(I[n],Q[n]); if(env[n]>mx) mx=env[n]; }
+  mx=mx||1;
+  x.strokeStyle='#2b301f'; x.lineWidth=1;
+  for(let g=1;g<4;g++){ x.beginPath(); x.moveTo(0,H*g/4); x.lineTo(W,H*g/4); x.stroke(); }
+  x.strokeStyle=CSS('--acc'); x.lineWidth=1.2; x.beginPath();
+  for(let px=0;px<W;px++){
+    const a=Math.floor(px/W*N), b=Math.max(a+1,Math.floor((px+1)/W*N));
+    let peak=0; for(let n=a;n<b&&n<N;n++) if(env[n]>peak) peak=env[n];
+    const yy=H-(peak/mx)*(H-6)-3;
+    px? x.lineTo(px,yy) : x.moveTo(px,yy);
+  }
+  x.stroke();
+}
+
+function plotSpectrum(I,Q){
+  const {x,W,H}=fitCanvas($('pFreq'));
+  x.clearRect(0,0,W,H);
+  const N=I.length;
+  const re=Float64Array.from(I), im=Float64Array.from(Q);
+  fft(re,im);
+  const P=new Float64Array(N);
+  let mx=-Infinity, mn=Infinity;
+  for(let n=0;n<N;n++){
+    const s=(n+N/2)%N;
+    P[n]=10*Math.log10(re[s]*re[s]+im[s]*im[s]+1e-12);
+    if(P[n]>mx)mx=P[n]; if(P[n]<mn)mn=P[n];
+  }
+  mn=Math.max(mn,mx-70);
+  x.strokeStyle='#2b301f'; x.lineWidth=1;
+  x.beginPath(); x.moveTo(W/2,0); x.lineTo(W/2,H); x.stroke();
+  x.strokeStyle=CSS('--acc'); x.lineWidth=1.1; x.beginPath();
+  for(let px=0;px<W;px++){
+    const a=Math.floor(px/W*N), b=Math.max(a+1,Math.floor((px+1)/W*N));
+    let peak=-Infinity; for(let n=a;n<b&&n<N;n++) if(P[n]>peak) peak=P[n];
+    const yy=H-((peak-mn)/(mx-mn||1))*(H-6)-3;
+    px? x.lineTo(px,yy) : x.moveTo(px,yy);
+  }
+  x.stroke();
+  x.fillStyle=CSS('--dim'); x.font='10px '+CSS('--mono');
+  x.fillText('0', W/2+3, H-4);
+}
+
+function plotSpectrogram(I,Q){
+  const {x,W,H}=fitCanvas($('pSpec'));
+  x.clearRect(0,0,W,H);
+  const N=I.length, win=Math.min(256,N/8), cols=Math.floor(N/win);
+  const img=x.createImageData(Math.max(1,cols), win);
+  let mx=-Infinity, mn=Infinity;
+  const grid=[];
+  for(let c=0;c<cols;c++){
+    const rr=new Float64Array(win), ii=new Float64Array(win);
+    for(let n=0;n<win;n++){
+      const w=0.5-0.5*Math.cos(2*Math.PI*n/win);   // Hann
+      rr[n]=I[c*win+n]*w; ii[n]=Q[c*win+n]*w;
+    }
+    fft(rr,ii);
+    const col=new Float64Array(win);
+    for(let n=0;n<win;n++){
+      const s=(n+win/2)%win;
+      col[n]=10*Math.log10(rr[s]*rr[s]+ii[s]*ii[s]+1e-12);
+      if(col[n]>mx)mx=col[n]; if(col[n]<mn)mn=col[n];
+    }
+    grid.push(col);
+  }
+  mn=Math.max(mn,mx-55);
+  for(let c=0;c<cols;c++) for(let n=0;n<win;n++){
+    const v=Math.max(0,Math.min(1,(grid[c][n]-mn)/(mx-mn||1)));
+    const i=((win-1-n)*cols+c)*4;
+    img.data[i]  =Math.round(255*Math.min(1,v*1.6));
+    img.data[i+1]=Math.round(220*Math.pow(v,1.4));
+    img.data[i+2]=Math.round(90*Math.pow(v,3));
+    img.data[i+3]=255;
+  }
+  const tmp=document.createElement('canvas');
+  tmp.width=Math.max(1,cols); tmp.height=win;
+  tmp.getContext('2d').putImageData(img,0,0);
+  x.imageSmoothingEnabled=true;
+  x.drawImage(tmp,0,0,W,H);
+}
+
+function plotIQ(I,Q){
+  const {x,W,H}=fitCanvas($('pIq'));
+  x.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2, r=Math.min(W,H)/2-6;
+  x.strokeStyle='#2b301f'; x.lineWidth=1;
+  x.beginPath(); x.moveTo(cx,0); x.lineTo(cx,H); x.moveTo(0,cy); x.lineTo(W,cy); x.stroke();
+  let mx=0;
+  for(let n=0;n<I.length;n++){ const m=Math.hypot(I[n],Q[n]); if(m>mx) mx=m; }
+  mx=mx||1;
+  x.fillStyle='rgba(251,191,36,.42)';
+  const step=Math.max(1,Math.floor(I.length/2200));
+  for(let n=0;n<I.length;n+=step){
+    x.fillRect(cx+I[n]/mx*r-0.9, cy-Q[n]/mx*r-0.9, 1.8, 1.8);
+  }
+}
+
+function showFeatures(f){
+  const rows=f.map((v,i)=>{
+    const name=FEATNAMES[i]||('feature '+i);
+    return `<div class="r"><div class="k">${name}<div style="color:var(--dim);font-size:10.5px">${FEATHELP[name]||''}</div></div>
+            <div class="v">${Number.isFinite(v)?v.toFixed(4):'—'}</div></div>`;
+  }).join('');
+  $('featTable').innerHTML=rows;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ACTIONS
+// ══════════════════════════════════════════════════════════════
+function doGenerate(){
+  const k=$('kind').value, snr=+$('snr').value;
+  const sig=generate(k,snr);
+  S.last={...sig, kind:k, snr};
+  plotTime(sig.I,sig.Q); plotSpectrum(sig.I,sig.Q);
+  plotSpectrogram(sig.I,sig.Q); plotIQ(sig.I,sig.Q);
+  showFeatures(features(sig.I,sig.Q));
+  setView('signal');
+  if(sig.truth) toast(`${k} — ${sig.truth.mod.toUpperCase()}, ${(sig.truth.pw*1e6).toFixed(1)} µs pulse at ${Math.round(sig.truth.prf)} Hz`);
+  else toast(`${k} at ${snr} dB`);
+}
+
+function doBuild(){
+  const per=+$('per').value, ks=kinds(), N=sampleLen();
+  const X=[], y=[];
+  let c=0, i=0, done=0;
+  const total=per*ks.length;
+  $('buildProg').hidden=false;
+  $('build').disabled=true;
+  const bar=$('buildProg').firstElementChild;
+
+  function chunk(){
+    const t0=performance.now();
+    while(performance.now()-t0 < 80){
+      if(c>=ks.length){ finish(); return; }
+      const snr = S.family==='radar' ? rnd(8,28) : rnd(10,30);
+      const sig=generate(ks[c],snr);
+      X.push(features(sig.I,sig.Q)); y.push(c);
+      done++; i++;
+      if(i>=per){ i=0; c++; }
+    }
+    bar.style.width=(done/total*100).toFixed(1)+'%';
+    requestAnimationFrame(chunk);
+  }
+  function finish(){
+    S.ds={X,y,kinds:ks.slice(),family:S.family};
+    S.forest=null;
+    $('buildProg').hidden=true; bar.style.width='0';
+    $('build').disabled=false; $('train').disabled=false;
+    $('exportBtn').disabled=false;
+    $('dsInfo').textContent=`${X.length} examples · ${ks.length} types · ${FEATNAMES.length} measurements each`;
+    $('trainInfo').textContent='Ready to train';
+    toast(`Dataset built — ${X.length} examples`);
+  }
+  requestAnimationFrame(chunk);
+}
+
+function doTrain(){
+  if(!S.ds) return;
+  const useLeak = $('leak').checked && S.ds.family==='radar';
+  const X = useLeak ? S.ds.X.map((f,i)=>f.concat(LEAK[S.ds.kinds[S.ds.y[i]]])) : S.ds.X;
+  S.featNames = useLeak ? FEATNAMES.concat(LEAKNAMES) : FEATNAMES.slice();
+
+  // stratified 70/30 split, so every type appears in both halves
+  const tr=[], te=[];
+  for(let c=0;c<S.ds.kinds.length;c++){
+    const ids=[]; for(let i=0;i<S.ds.y.length;i++) if(S.ds.y[i]===c) ids.push(i);
+    ids.sort(()=>Math.random()-0.5);
+    const cut=Math.max(1,Math.floor(ids.length*0.7));
+    tr.push(...ids.slice(0,cut)); te.push(...ids.slice(cut));
+  }
+  const t0=performance.now();
+  const F=trainForest(tr.map(i=>X[i]), tr.map(i=>S.ds.y[i]), S.ds.kinds.length,
+                      {nTrees:+$('trees').value, maxDepth:+$('depth').value});
+  const ms=Math.round(performance.now()-t0);
+  S.forest=F; S.forestLeak=useLeak;
+
+  const n=S.ds.kinds.length;
+  const cm=Array.from({length:n},()=>new Array(n).fill(0));
+  let ok=0;
+  for(const i of te){
+    const p=predict(F,X[i]);
+    cm[S.ds.y[i]][p.cls]++;
+    if(p.cls===S.ds.y[i]) ok++;
+  }
+  const acc=ok/te.length;
+
+  $('tAcc').textContent=(acc*100).toFixed(1)+'%';
+  $('tAcc').style.color = acc>0.9 ? 'var(--ok)' : acc>0.7 ? 'var(--acc)' : 'var(--bad)';
+  $('tN').textContent=tr.length;
+  $('tHeld').textContent=te.length;
+  $('tTime').textContent=ms+'ms';
+
+  const short=k=>k.replace('AN/','');
+  let html='<tr><th></th>'+S.ds.kinds.map(k=>`<th>${short(k)}</th>`).join('')+'</tr>';
+  for(let r=0;r<n;r++){
+    const tot=cm[r].reduce((a,b)=>a+b,0)||1;
+    html+=`<tr><th class="rowh">${short(S.ds.kinds[r])}</th>`;
+    for(let c2=0;c2<n;c2++){
+      const val=cm[r][c2], f=val/tot;
+      const bg = r===c2 ? `rgba(74,222,128,${0.12+f*0.6})` : (val? `rgba(248,113,113,${0.10+f*0.5})` : 'transparent');
+      html+=`<td class="${r===c2?'d':''}" style="background:${bg}">${val||''}</td>`;
+    }
+    html+='</tr>';
+  }
+  $('cm').innerHTML=html;
+
+  const imp=F.importance.map((v,i)=>[S.featNames[i],v]).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const top=imp[0][1]||1;
+  $('impTable').innerHTML=imp.map(([nm,v])=>{
+    const leak=nm.startsWith('spec:');
+    return `<div class="r"><div class="k" style="${leak?'color:var(--bad)':''}">${nm}</div>
+      <div style="flex:2;display:flex;align-items:center;gap:8px">
+        <div class="bar" style="width:${(v/top*100).toFixed(0)}%;background:${leak?'var(--bad)':'var(--acc)'}"></div>
+        <span class="v">${(v*100).toFixed(1)}%</span></div></div>`;
+  }).join('');
+
+  document.querySelector('.tab[data-view="training"]').disabled=false;
+  document.querySelector('.tab[data-view="testing"]').disabled=false;
+  $('test1').disabled=false; $('test50').disabled=false;
+  S.test={n:0,ok:0,conf:0}; $('testLog').innerHTML='<div class="empty">Nothing tested yet.</div>';
+  updateTestStats();
+  setView('training');
+  $('trainInfo').textContent=`Accuracy ${(acc*100).toFixed(1)}% on ${te.length} held-back examples`;
+  toast(useLeak ? `${(acc*100).toFixed(1)}% — with the spec sheet leaked in`
+                : `${(acc*100).toFixed(1)}% on signals it had never seen`);
+}
+
+function classifyOne(silent){
+  if(!S.forest||!S.ds) return;
+  const ks=S.ds.kinds;
+  const truth=Math.floor(Math.random()*ks.length);
+  const snr = S.ds.family==='radar' ? rnd(8,28) : rnd(10,30);
+  const sig = S.ds.family==='radar' ? genRadar(ks[truth],8192,snr) : genRadio(ks[truth],2048,snr);
+  let f=features(sig.I,sig.Q);
+  if(S.forestLeak) f=f.concat(LEAK[ks[truth]]);
+  const p=predict(S.forest,f);
+  const right=p.cls===truth;
+
+  S.test.n++; if(right) S.test.ok++; S.test.conf+=p.conf;
+  const log=$('testLog');
+  if(S.test.n===1) log.innerHTML='';
+  const row=document.createElement('div');
+  row.className='r';
+  row.innerHTML=`<div class="k" style="flex:2">
+      <span style="color:${right?'var(--ok)':'var(--bad)'};font-weight:700">${right?'✓':'✗'}</span>
+      &nbsp;${ks[truth]} <span style="color:var(--dim)">→</span> ${ks[p.cls]}</div>
+    <div class="v">${snr.toFixed(0)} dB</div>
+    <div class="v" style="width:56px;text-align:right">${(p.conf*100).toFixed(0)}%</div>`;
+  log.prepend(row);
+  while(log.children.length>120) log.lastElementChild.remove();
+  updateTestStats();
+  if(!silent) setView('testing');
+}
+function updateTestStats(){
+  $('xN').textContent=S.test.n;
+  $('xOk').textContent=S.test.ok;
+  $('xAcc').textContent = S.test.n? (S.test.ok/S.test.n*100).toFixed(1)+'%' : '—';
+  $('xConf').textContent = S.test.n? (S.test.conf/S.test.n*100).toFixed(0)+'%' : '—';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  UI
+// ══════════════════════════════════════════════════════════════
+function setView(v){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===v));
+  $('vSignal').hidden   = v!=='signal';
+  $('vTraining').hidden = v!=='training';
+  $('vTesting').hidden  = v!=='testing';
+  if(v==='signal' && S.last){
+    plotTime(S.last.I,S.last.Q); plotSpectrum(S.last.I,S.last.Q);
+    plotSpectrogram(S.last.I,S.last.Q); plotIQ(S.last.I,S.last.Q);
+  }
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ if(!t.disabled) setView(t.dataset.view); });
+
+function setFamily(f){
+  S.family=f;
+  $('fRadar').classList.toggle('on',f==='radar');
+  $('fRadio').classList.toggle('on',f==='radio');
+  const cat=catalogue();
+  $('kind').innerHTML=Object.entries(cat)
+    .map(([k,v])=>`<option value="${k}">${v.label||k}</option>`).join('');
+  updateKindNote();
+  $('leakWrap').hidden = f!=='radar';
+  S.ds=null; S.forest=null;
+  $('train').disabled=true; $('test1').disabled=true; $('test50').disabled=true;
+  $('exportBtn').disabled=true;
+  document.querySelector('.tab[data-view="training"]').disabled=true;
+  document.querySelector('.tab[data-view="testing"]').disabled=true;
+  $('dsInfo').textContent='No dataset yet';
+  $('trainInfo').textContent='Build a dataset first';
+  $('capIq').textContent = f==='radar' ? 'I/Q plane — pulse phase pattern' : 'I/Q constellation';
+  $('sideNote').innerHTML = f==='radar'
+    ? `<b>These six overlap on purpose.</b> Their published pulse widths and PRFs
+       cover much the same ground, so telling them apart from one look is genuinely
+       hard — expect roughly 60&ndash;65%. That is the honest ceiling, not a broken model.
+       Tick the spec-sheet box to see what cheating looks like.`
+    : `<b>Modulation recognition is much easier.</b> Expect above 95%. The one
+       stubborn pair is 16-QAM against 64-QAM — they differ only in how densely the
+       constellation is packed, which noise smears out.`;
+  setView('signal');
+  doGenerate();
+}
+function updateKindNote(){
+  const c=catalogue()[$('kind').value];
+  $('kindNote').textContent = c && c.note ? c.note : '';
+}
+
+$('fRadar').onclick=()=>setFamily('radar');
+$('fRadio').onclick=()=>setFamily('radio');
+$('kind').onchange=()=>{ updateKindNote(); doGenerate(); };
+$('snr').oninput=()=>{ $('snrL').textContent=$('snr').value; };
+$('snr').onchange=doGenerate;
+$('per').oninput=()=>{ $('perL').textContent=$('per').value; };
+$('trees').oninput=()=>{ $('treesL').textContent=$('trees').value; };
+$('depth').oninput=()=>{ $('depthL').textContent=$('depth').value; };
+$('gen').onclick=doGenerate;
+$('build').onclick=doBuild;
+$('train').onclick=()=>setTimeout(doTrain,10);
+$('test1').onclick=()=>classifyOne(false);
+$('test50').onclick=()=>{ setView('testing'); for(let i=0;i<50;i++) classifyOne(true); toast('50 fresh signals classified'); };
+
+$('exportBtn').onclick=()=>{
+  if(!S.ds) return;
+  const head=['label'].concat(FEATNAMES).join(',');
+  const rows=S.ds.X.map((f,i)=>[S.ds.kinds[S.ds.y[i]]].concat(f.map(v=>v.toFixed(6))).join(','));
+  const blob=new Blob([head+'\n'+rows.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.download=`pulse-read-${S.ds.family}.csv`;
+  a.href=URL.createObjectURL(blob); a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Exported ${rows.length} rows`);
+};
+
+window.addEventListener('resize',()=>{ if(S.last && !$('vSignal').hidden){
+  plotTime(S.last.I,S.last.Q); plotSpectrum(S.last.I,S.last.Q);
+  plotSpectrogram(S.last.I,S.last.Q); plotIQ(S.last.I,S.last.Q); } });
+
+setFamily('radar');
+})();
+</script>
+</body>
+</html>
