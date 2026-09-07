@@ -802,7 +802,10 @@ function doBuild(){
       if(i>=per){ i=0; c++; }
     }
     bar.style.width=(done/total*100).toFixed(1)+'%';
-    requestAnimationFrame(chunk);
+    // setTimeout, not requestAnimationFrame: browsers pause animation callbacks
+    // in a background tab, which would leave a build frozen at 0% until you
+    // came back to the page. Timers keep running.
+    setTimeout(chunk,0);
   }
   function finish(){
     S.ds={X,y,kinds:ks.slice(),family:S.family};
@@ -814,7 +817,7 @@ function doBuild(){
     $('trainInfo').textContent='Ready to train';
     toast(`Dataset built — ${X.length} examples`);
   }
-  requestAnimationFrame(chunk);
+  setTimeout(chunk,0);
 }
 
 function doTrain(){
